@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: sonic-metrics-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sonic_metrics
+      POSTGRES_PASSWORD: sonic_metrics_dev
+      POSTGRES_DB: sonic_metrics
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

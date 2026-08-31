@@ -1,0 +1,78 @@
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+
+
+# =========================
+# Testing / Coverage
+# =========================
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+# =========================
+# Node / JavaScript
+# =========================
+node_modules/
+.npm/
+.yarn/
+.pnpm-store/
+
+
+# =========================
+# Expo
+# =========================
+.expo/
+.expo-shared/
+web-build/
+dist/
+
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+
+# =========================
+# Operating System
+# =========================
+.DS_Store
+Thumbs.db
+
+
+# =========================
+# Logs
+# =========================
+*.log
+
+
+# =========================
+# Local databases
+# =========================
+*.db
+*.sqlite
+*.sqlite3

@@ -1,0 +1,9 @@
+1. go to C:\Users\aquin\projects\sonic_metrics\services\api
+2. open venv for backend - .\.venv\Scripts\Activate.ps1
+deactivate venv - deactivate
+open backend - uvicorn app.main:app --reload
+
+for frontend open using - npx expo start
+
+run database: docker compose up -d
+docker compose ps
