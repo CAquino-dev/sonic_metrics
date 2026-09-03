@@ -2,14 +2,20 @@
 name = "sonic-metrics-api"
 version = "0.1.0"
 description = "Backend API for Sonic Metrics"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
+    "alembic",
     "fastapi",
+    "httpx>=0.28.1",
+    "psycopg",
+    "pydantic-settings",
+    "python-jose[cryptography]>=3.5.0",
+    "sqlalchemy",
     "uvicorn[standard]",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest",
     "httpx",
+    "pytest",
 ]

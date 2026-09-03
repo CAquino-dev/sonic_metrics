@@ -7,3 +7,4 @@ for frontend open using - npx expo start
 
 run database: docker compose up -d
 docker compose ps
+make sure docker is running 
