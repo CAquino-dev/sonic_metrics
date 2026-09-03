@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
@@ -9,6 +9,7 @@ from app.services.dependencies import get_current_user
 from app.services.spotify import (
     get_current_user as get_spotify_user,
     get_valid_access_token,
+    get_top_artists
 )
 
 
@@ -72,4 +73,82 @@ async def spotify_me(
         "email": spotify_user.get("email"),
         "spotify_product": spotify_user.get("product"),
         "country": spotify_user.get("country"),
+    }
+
+@router.get("/top-artists")
+async def top_artists(
+    time_range: str = Query(
+        default="medium_term",
+        pattern="^(short_term|medium_term|long_term)$",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Find the user's Spotify token
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    # Get a valid Spotify access token
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    # Save refreshed token information
+    db.commit()
+
+    # Get top artists from Spotify
+    try:
+        data = await get_top_artists(
+            access_token=access_token,
+            time_range=time_range,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        ) from exc
+
+    # Return only the information Sonic Metrics needs
+    return {
+        "time_range": time_range,
+        "limit": limit,
+        "items": [
+            {
+                "id": artist["id"],
+                "name": artist["name"],
+                "genres": artist.get("genres", []),
+                "popularity": artist.get("popularity"),
+                "followers": artist.get(
+                    "followers",
+                    {},
+                ).get("total"),
+                "images": artist.get("images", []),
+            }
+            for artist in data.get("items", [])
+        ],
     }
