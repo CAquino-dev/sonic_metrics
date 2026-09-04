@@ -454,3 +454,86 @@ async def artist_tags(
         "artist": artist,
         "tags": tags,
     }
+
+@router.get("/recently-played")
+async def recently_played(
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    db.commit()
+
+    try:
+        data = await get_recently_played(
+            access_token=access_token,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve recently played tracks from Spotify.",
+        ) from exc
+
+    return {
+        "limit": limit,
+        "items": [
+            {
+                "played_at": item.get("played_at"),
+                "track": {
+                    "id": item["track"]["id"],
+                    "name": item["track"]["name"],
+                    "duration_ms": item["track"].get("duration_ms"),
+                    "explicit": item["track"].get("explicit"),
+                    "artists": [
+                        {
+                            "id": artist["id"],
+                            "name": artist["name"],
+                        }
+                        for artist in item["track"].get(
+                            "artists",
+                            [],
+                        )
+                    ],
+                    "album": {
+                        "id": item["track"]["album"]["id"],
+                        "name": item["track"]["album"]["name"],
+                        "images": item["track"]["album"].get(
+                            "images",
+                            [],
+                        ),
+                    },
+                },
+            }
+            for item in data.get("items", [])
+        ],
+    }
