@@ -20,7 +20,14 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 
-SPOTIFY_SCOPES = "user-read-private user-read-email user-top-read"
+SPOTIFY_SCOPES = (
+    "user-read-private "
+    "user-read-email "
+    "user-top-read "
+    "user-read-recently-played "
+    "user-read-playback-state "
+    "user-read-currently-playing "
+)
 
 
 @router.get("/spotify/login")
