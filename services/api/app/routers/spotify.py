@@ -13,6 +13,7 @@ from app.services.spotify import (
     get_top_tracks,
     get_recently_played,
     get_artist,
+    get_player_state,
     )
 
 from app.services.lastfm import get_artist_tags
@@ -453,4 +454,179 @@ async def artist_tags(
     return {
         "artist": artist,
         "tags": tags,
+    }
+
+@router.get("/recently-played")
+async def recently_played(
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    db.commit()
+
+    try:
+        data = await get_recently_played(
+            access_token=access_token,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve recently played tracks from Spotify.",
+        ) from exc
+
+    return {
+        "limit": limit,
+        "items": [
+            {
+                "played_at": item.get("played_at"),
+                "track": {
+                    "id": item["track"]["id"],
+                    "name": item["track"]["name"],
+                    "duration_ms": item["track"].get("duration_ms"),
+                    "explicit": item["track"].get("explicit"),
+                    "artists": [
+                        {
+                            "id": artist["id"],
+                            "name": artist["name"],
+                        }
+                        for artist in item["track"].get(
+                            "artists",
+                            [],
+                        )
+                    ],
+                    "album": {
+                        "id": item["track"]["album"]["id"],
+                        "name": item["track"]["album"]["name"],
+                        "images": item["track"]["album"].get(
+                            "images",
+                            [],
+                        ),
+                    },
+                },
+            }
+            for item in data.get("items", [])
+        ],
+    }
+
+@router.get("/player")
+async def spotify_player(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    db.commit()
+
+    try:
+        player = await get_player_state(
+            access_token=access_token,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve Spotify player state.",
+        ) from exc
+
+    if player is None:
+        return {
+            "is_playing": False,
+            "track": None,
+            "progress_ms": None,
+            "device": None,
+        }
+
+    item = player.get("item")
+
+    if item is None:
+        return {
+            "is_playing": player.get("is_playing", False),
+            "track": None,
+            "progress_ms": player.get("progress_ms"),
+            "device": None,
+        }
+
+    return {
+        "is_playing": player.get("is_playing", False),
+        "progress_ms": player.get("progress_ms"),
+        "track": {
+            "id": item.get("id"),
+            "name": item.get("name"),
+            "duration_ms": item.get("duration_ms"),
+            "explicit": item.get("explicit"),
+            "artists": [
+                {
+                    "id": artist["id"],
+                    "name": artist["name"],
+                }
+                for artist in item.get("artists", [])
+            ],
+            "album": {
+                "id": item["album"].get("id"),
+                "name": item["album"].get("name"),
+                "images": item["album"].get("images", []),
+            },
+        },
+        "device": {
+            "id": player["device"].get("id"),
+            "name": player["device"].get("name"),
+            "type": player["device"].get("type"),
+            "volume_percent": player["device"].get(
+                "volume_percent"
+            ),
+        } if player.get("device") else None,
     }

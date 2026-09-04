@@ -187,3 +187,23 @@ async def get_recently_played(
         )
 
     return response.json()
+
+async def get_player_state(access_token: str) -> dict | None:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SPOTIFY_API_BASE_URL}/me/player",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+            },
+        )
+
+    if response.status_code == 204:
+        return None
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Spotify player request failed: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    return response.json()
