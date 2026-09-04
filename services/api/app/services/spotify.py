@@ -115,6 +115,26 @@ async def get_top_artists(
 
     return response.json()
 
+async def get_artist(
+    access_token: str,
+    artist_id: str,
+) -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SPOTIFY_API_BASE_URL}/artists/{artist_id}",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+            },
+        )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Spotify artist request failed: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    return response.json()
+
 async def get_top_tracks(
     access_token: str,
     time_range: str = "medium_term",

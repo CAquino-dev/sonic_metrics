@@ -11,9 +11,12 @@ from app.services.spotify import (
     get_valid_access_token,
     get_top_artists,
     get_top_tracks,
-    get_recently_played
+    get_recently_played,
+    get_artist,
     )
 
+from app.services.lastfm import get_artist_tags
+from app.services.genre_normalizer import normalize_genre
 
 router = APIRouter(
     prefix="/spotify",
@@ -327,4 +330,127 @@ async def recently_played(
             }
             for item in data.get("items", [])
         ],
+    }
+@router.get("/genres")
+async def spotify_genres(
+    time_range: str = Query(
+        default="medium_term",
+        pattern="^(short_term|medium_term|long_term)$",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    db.commit()
+
+    try:
+        top_artists = await get_top_artists(
+            access_token=access_token,
+            time_range=time_range,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve top artists from Spotify.",
+        ) from exc
+
+    genre_counts: dict[str, int] = {}
+
+    for artist in top_artists.get("items", []):
+        artist_name = artist.get("name")
+
+        if not artist_name:
+            continue
+
+        try:
+            tags = await get_artist_tags(
+                artist_name=artist_name,
+                limit=10,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Failed to retrieve artist tags from Last.fm.",
+            ) from exc
+
+        for tag in tags:
+            tag_name = tag.get("name")
+
+            if not tag_name:
+                continue
+
+            genre = normalize_genre(tag_name)
+
+            if genre is None:
+                continue
+
+            genre_counts[genre] = (
+                genre_counts.get(genre, 0) + 1
+            )
+
+    sorted_genres = sorted(
+        genre_counts.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+
+    return {
+        "time_range": time_range,
+        "artist_limit": limit,
+        "genres": [
+            {
+                "genre": genre,
+                "artist_count": count,
+            }
+            for genre, count in sorted_genres
+        ],
+    }
+
+@router.get("/artist-tags")
+async def artist_tags(
+    artist: str = Query(..., min_length=1),
+):
+    try:
+        tags = await get_artist_tags(artist_name=artist)
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve artist tags from Last.fm.",
+        ) from exc
+
+    return {
+        "artist": artist,
+        "tags": tags,
     }

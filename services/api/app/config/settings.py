@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     spotify_client_id: str = Field(validation_alias="SPOTIFY_CLIENT_ID")
     spotify_client_secret: str = Field(validation_alias="SPOTIFY_CLIENT_SECRET")
     spotify_redirect_uri: str = Field(validation_alias="SPOTIFY_REDIRECT_URI")
+    lastfm_api_key: str = Field(validation_alias="LASTFM_API_KEY")
 
     model_config = SettingsConfigDict(
         env_file=".env",
