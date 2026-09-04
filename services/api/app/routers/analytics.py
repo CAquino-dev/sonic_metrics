@@ -176,3 +176,195 @@ async def analytics_overview(
         "track_count": len(tracks),
         "genre_count": len(sorted_genres),
     }
+
+@router.get("/artists")
+async def analytics_artists(
+    time_range: str = Query(
+        default="medium_term",
+        pattern="^(short_term|medium_term|long_term)$",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    db.commit()
+
+    try:
+        data = await get_top_artists(
+            access_token=access_token,
+            time_range=time_range,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve top artists from Spotify.",
+        ) from exc
+
+    spotify_artists = data.get("items", [])
+
+    artists = []
+
+    for rank, artist in enumerate(spotify_artists, start=1):
+        artist_name = artist.get("name")
+
+        genres = []
+
+        if artist_name:
+            try:
+                tags = await get_artist_tags(
+                    artist_name=artist_name,
+                    limit=10,
+                )
+            except RuntimeError as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Failed to retrieve artist tags from Last.fm.",
+                ) from exc
+
+            for tag in tags:
+                tag_name = tag.get("name")
+
+                if not tag_name:
+                    continue
+
+                genre = normalize_genre(tag_name)
+
+                if genre and genre not in genres:
+                    genres.append(genre)
+
+        artists.append(
+            {
+                "rank": rank,
+                "id": artist.get("id"),
+                "name": artist.get("name"),
+                "images": artist.get("images", []),
+                "genres": genres[:5],
+            }
+        )
+
+    return {
+        "time_range": time_range,
+        "limit": limit,
+        "total_artists": len(artists),
+        "artists": artists,
+    }
+
+@router.get("/tracks")
+async def analytics_tracks(
+    time_range: str = Query(
+        default="medium_term",
+        pattern="^(short_term|medium_term|long_term)$",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    db.commit()
+
+    try:
+        data = await get_top_tracks(
+            access_token=access_token,
+            time_range=time_range,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve top tracks from Spotify.",
+        ) from exc
+
+    spotify_tracks = data.get("items", [])
+
+    tracks = []
+
+    for rank, track in enumerate(spotify_tracks, start=1):
+        tracks.append(
+            {
+                "rank": rank,
+                "id": track.get("id"),
+                "name": track.get("name"),
+                "duration_ms": track.get("duration_ms"),
+                "explicit": track.get("explicit", False),
+                "artists": [
+                    {
+                        "id": artist.get("id"),
+                        "name": artist.get("name"),
+                    }
+                    for artist in track.get("artists", [])
+                ],
+                "album": {
+                    "id": track.get("album", {}).get("id"),
+                    "name": track.get("album", {}).get("name"),
+                    "images": track.get("album", {}).get("images", []),
+                },
+                "popularity": track.get("popularity"),
+            }
+        )
+
+    return {
+        "time_range": time_range,
+        "limit": limit,
+        "total_tracks": len(tracks),
+        "tracks": tracks,
+    }
