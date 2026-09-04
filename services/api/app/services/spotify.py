@@ -87,3 +87,103 @@ async def get_spotify_profile(
     access_token: str,
 ) -> dict:
     return await get_current_user(access_token)
+
+async def get_top_artists(
+    access_token: str,
+    time_range: str = "medium_term",
+    limit: int = 20,
+) -> dict:
+    params = {
+        "time_range": time_range,
+        "limit": limit,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SPOTIFY_API_BASE_URL}/me/top/artists",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+            },
+            params=params,
+        )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Spotify top artists request failed: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    return response.json()
+
+async def get_artist(
+    access_token: str,
+    artist_id: str,
+) -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SPOTIFY_API_BASE_URL}/artists/{artist_id}",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+            },
+        )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Spotify artist request failed: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    return response.json()
+
+async def get_top_tracks(
+    access_token: str,
+    time_range: str = "medium_term",
+    limit: int = 20,
+) -> dict:
+    params = {
+        "time_range": time_range,
+        "limit": limit,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SPOTIFY_API_BASE_URL}/me/top/tracks",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+            },
+            params=params,
+        )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Spotify top tracks request failed: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    return response.json()
+
+
+async def get_recently_played(
+    access_token: str,
+    limit: int = 20,
+) -> dict:
+    params = {
+        "limit": limit,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{SPOTIFY_API_BASE_URL}/me/player/recently-played",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+            },
+            params=params,
+        )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Spotify recently played request failed: "
+            f"{response.status_code} - {response.text}"
+        )
+
+    return response.json()
