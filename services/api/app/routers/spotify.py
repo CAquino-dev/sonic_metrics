@@ -9,7 +9,8 @@ from app.services.dependencies import get_current_user
 from app.services.spotify import (
     get_current_user as get_spotify_user,
     get_valid_access_token,
-    get_top_artists
+    get_top_artists,
+    get_top_tracks,
 )
 
 
@@ -150,5 +151,91 @@ async def top_artists(
                 "images": artist.get("images", []),
             }
             for artist in data.get("items", [])
+        ],
+    }
+
+@router.get("/top-tracks")
+async def top_tracks(
+    time_range: str = Query(
+        default="medium_term",
+        pattern="^(short_term|medium_term|long_term)$",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Find the user's Spotify token
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    # Get a valid Spotify access token
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    # Save refreshed token information
+    db.commit()
+
+    # Get top tracks from Spotify
+    try:
+        data = await get_top_tracks(
+            access_token=access_token,
+            time_range=time_range,
+            limit=limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve top tracks from Spotify.",
+        ) from exc
+
+    # Return only the information Sonic Metrics needs
+    return {
+        "time_range": time_range,
+        "limit": limit,
+        "items": [
+            {
+                "id": track["id"],
+                "name": track["name"],
+                "duration_ms": track.get("duration_ms"),
+                "popularity": track.get("popularity"),
+                "explicit": track.get("explicit"),
+                "artists": [
+                    {
+                        "id": artist["id"],
+                        "name": artist["name"],
+                    }
+                    for artist in track.get("artists", [])
+                ],
+                "album": {
+                    "id": track["album"]["id"],
+                    "name": track["album"]["name"],
+                    "images": track["album"].get("images", []),
+                },
+            }
+            for track in data.get("items", [])
         ],
     }
