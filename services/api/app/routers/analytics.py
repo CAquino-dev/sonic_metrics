@@ -368,3 +368,120 @@ async def analytics_tracks(
         "total_tracks": len(tracks),
         "tracks": tracks,
     }
+
+@router.get("/genres")
+async def analytics_genres(
+    time_range: str = Query(
+        default="medium_term",
+        pattern="^(short_term|medium_term|long_term)$",
+    ),
+    artist_limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+    ),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    spotify_token = (
+        db.query(SpotifyToken)
+        .filter(
+            SpotifyToken.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if spotify_token is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Spotify account is not connected.",
+        )
+
+    try:
+        access_token = await get_valid_access_token(
+            spotify_token=spotify_token,
+            client_id=settings.spotify_client_id,
+            client_secret=settings.spotify_client_secret,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to refresh Spotify access token.",
+        ) from exc
+
+    db.commit()
+
+    try:
+        data = await get_top_artists(
+            access_token=access_token,
+            time_range=time_range,
+            limit=artist_limit,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to retrieve top artists from Spotify.",
+        ) from exc
+
+    artists = data.get("items", [])
+
+    genre_counts: dict[str, int] = {}
+
+    for artist in artists:
+        artist_name = artist.get("name")
+
+        if not artist_name:
+            continue
+
+        try:
+            tags = await get_artist_tags(
+                artist_name=artist_name,
+                limit=10,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Failed to retrieve artist tags from Last.fm.",
+            ) from exc
+
+        artist_genres: set[str] = set()
+
+        for tag in tags:
+            tag_name = tag.get("name")
+
+            if not tag_name:
+                continue
+
+            genre = normalize_genre(tag_name)
+
+            if genre:
+                artist_genres.add(genre)
+
+        # Count each genre only once per artist.
+        for genre in artist_genres:
+            genre_counts[genre] = (
+                genre_counts.get(genre, 0) + 1
+            )
+
+    sorted_genres = sorted(
+        genre_counts.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+
+    genres = [
+        {
+            "rank": rank,
+            "genre": genre,
+            "artist_count": artist_count,
+        }
+        for rank, (genre, artist_count)
+        in enumerate(sorted_genres, start=1)
+    ]
+
+    return {
+        "time_range": time_range,
+        "artist_limit": artist_limit,
+        "total_genres": len(genres),
+        "genres": genres,
+    }
