@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request, Depends
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
@@ -159,19 +159,14 @@ async def spotify_callback(
         user_id=user.id
     )
 
-    # Return the JWT to the client
-    response = JSONResponse(
-        content={
-            "message": "Spotify authentication successful",
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user.id,
-                "spotify_user_id": user.spotify_user_id,
-                "display_name": user.display_name,
-                "email": user.email,
-            },
-        }
+    # Redirect back to the React application
+    frontend_callback_url = (
+        "http://localhost:5173/auth/callback"
+        f"?token={access_token}"
+    )
+
+    response = RedirectResponse(
+        url=frontend_callback_url
     )
 
     # Remove the OAuth state cookie

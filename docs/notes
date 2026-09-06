@@ -4,6 +4,7 @@ deactivate venv - deactivate
 open backend - uvicorn app.main:app --reload
 
 for frontend open using - npx expo start
+for web - npm run dev
 
 run database: docker compose up -d
 docker compose ps
