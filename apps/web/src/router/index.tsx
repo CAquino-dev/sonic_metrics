@@ -10,6 +10,7 @@ import Tracks from "../pages/Tracks";
 import RecentlyPlayed from "../pages/RecentlyPlayed";
 import NowPlaying from "../pages/NowPlaying";
 import Settings from "../pages/Settings";
+import AuthCallback from "../pages/AuthCallback";
 
 import ProtectedRoute from "./ProtectedRoute";
 import AppLayout from "../layouts/AppLayout";
@@ -21,6 +22,8 @@ export default function AppRouter() {
         {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/auth/callback" element={<AuthCallback />}
+        />
 
         {/* Protected routes */}
         <Route element={<ProtectedRoute />}>
