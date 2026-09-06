@@ -1,10 +1,7 @@
+import AppRouter from "./router";
+
 function App() {
-  return (
-    <div>
-      <h1>Sonic Metrics</h1>
-      <p>Spotify analytics, simplified.</p>
-    </div>
-  );
+  return <AppRouter />;
 }
 
 export default App;
