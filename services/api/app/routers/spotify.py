@@ -73,10 +73,19 @@ async def spotify_me(
             detail="Failed to retrieve Spotify profile.",
         ) from exc
 
+    images = spotify_user.get("images", [])
+
     return {
         "id": spotify_user.get("id"),
         "display_name": spotify_user.get("display_name"),
         "email": spotify_user.get("email"),
+
+        "photo": images[0].get("url") if images else None,
+
+        "followers": spotify_user.get("followers", {}).get(
+            "total", 0
+        ),
+
         "spotify_product": spotify_user.get("product"),
         "country": spotify_user.get("country"),
     }
