@@ -1,100 +1,49 @@
-// apps/web/src/pages/Dashboard.tsx
-
-import React from "react";
-import hiroi from "../assets/hiroi.jpg";
-
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Gauge,
   History,
-  Play,
+  Music2,
   Settings,
-  ShieldCheck,
+  Users,
 } from "lucide-react";
 
-interface ArtistStat {
-  name: string;
-  percent: number;
-}
+import {
+  getAnalyticsArtists,
+  getAnalyticsGenres,
+  getAnalyticsOverview,
+} from "../services/analytics";
 
-interface GenreStat {
-  label: string;
-  percent: number;
-  color: string;
-}
+import {
+  getMe,
+  getRecentlyPlayed,
+} from "../services/spotify";
 
-interface StreamEvent {
-  time: string;
-  title: string;
-  subtitle: string;
-}
+import type {
+  AnalyticsArtist,
+  AnalyticsGenre,
+  AnalyticsOverview,
+} from "../types/analytics";
+
+import type {
+  RecentlyPlayedTrack,
+  SpotifyUser,
+} from "../types/spotify";
 
 // ------------------------------------------------------------
-// DUMMY DATA
-// Replace with API data later.
+// CONSTANTS
 // ------------------------------------------------------------
 
-const profile = {
-  username: "hiroi",
-  tag: "PREMIUM_ACCOUNT / ARCHIVE_ACCESS",
-  listenTimeMins: 142890,
-  followers: "1.2K",
-  following: 842,
-  avatarUrl: hiroi,
-};
-
-const topArtists: ArtistStat[] = [
-  { name: "APHEX TWIN", percent: 92 },
-  { name: "MODERN ERROR", percent: 78 },
-  { name: "BURIAL", percent: 64 },
-  { name: "HEALTH", percent: 52 },
-  { name: "DEAFHEAVEN", percent: 41 },
+const GENRE_COLORS = [
+  "#4ade80",
+  "#facc15",
+  "#111111",
+  "#fb7185",
+  "#60a5fa",
 ];
 
-const genres: GenreStat[] = [
-  {
-    label: "IDM",
-    percent: 50,
-    color: "#4ade80",
-  },
-  {
-    label: "GLITCH",
-    percent: 25,
-    color: "#facc15",
-  },
-  {
-    label: "POST-METAL",
-    percent: 25,
-    color: "#111111",
-  },
-];
-
-const streamHistory: StreamEvent[] = [
-  {
-    time: "14:21",
-    title: "XTAL",
-    subtitle: "Aphex Twin — Selected Ambient Works",
-  },
-  {
-    time: "13:55",
-    title: "ARCHANGEL",
-    subtitle: "Burial — Untrue",
-  },
-  {
-    time: "13:48",
-    title: "SELF-ABUSER",
-    subtitle: "Modern Error — Victim Of A Modern Age",
-  },
-  {
-    time: "13:30",
-    title: "MAJOR CITIES",
-    subtitle: "HEALTH — RAT WARS",
-  },
-];
-
-const systemStats = {
-  latencyMs: 14,
-  dataIntegrity: 99.9,
-  apiOnline: true,
+const TIME_RANGE_LABELS: Record<string, string> = {
+  short_term: "LAST 4 WEEKS",
+  medium_term: "LAST 6 MONTHS",
+  long_term: "ALL TIME",
 };
 
 // ------------------------------------------------------------
@@ -102,6 +51,150 @@ const systemStats = {
 // ------------------------------------------------------------
 
 export default function Dashboard() {
+  const [profile, setProfile] = useState<SpotifyUser | null>(null);
+  const [overview, setOverview] =
+    useState<AnalyticsOverview | null>(null);
+
+  const [artists, setArtists] = useState<AnalyticsArtist[]>([]);
+  const [genres, setGenres] = useState<AnalyticsGenre[]>([]);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<
+    RecentlyPlayedTrack[]
+  >([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // ----------------------------------------------------------
+  // LOAD DASHBOARD DATA
+  // ----------------------------------------------------------
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const [
+          profileData,
+          overviewData,
+          artistsData,
+          genresData,
+          recentlyPlayedData,
+        ] = await Promise.all([
+          getMe(),
+          getAnalyticsOverview("medium_term"),
+          getAnalyticsArtists("medium_term", 20),
+          getAnalyticsGenres("medium_term", 20),
+          getRecentlyPlayed(),
+        ]);
+
+        setProfile(profileData);
+        setOverview(overviewData);
+        setArtists(artistsData.artists);
+        setGenres(genresData.genres);
+
+        setRecentlyPlayed(
+          recentlyPlayedData.items,
+        );
+      } catch (err) {
+        console.error(err);
+        setError(
+          "Failed to load dashboard data.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDashboard();
+  }, []);
+
+  // ----------------------------------------------------------
+  // GENRE VISUALIZATION
+  // ----------------------------------------------------------
+
+  const displayedGenres = useMemo(() => {
+    const topGenres = genres.slice(0, 5);
+
+    const total = topGenres.reduce(
+      (sum, genre) => sum + genre.artist_count,
+      0,
+    );
+
+    return topGenres.map((genre, index) => ({
+      label: genre.genre,
+      artistCount: genre.artist_count,
+      percent:
+        total > 0
+          ? Math.round(
+              (genre.artist_count / total) * 100,
+            )
+          : 0,
+      color:
+        GENRE_COLORS[index % GENRE_COLORS.length],
+    }));
+  }, [genres]);
+
+  // ----------------------------------------------------------
+  // LOADING STATE
+  // ----------------------------------------------------------
+
+  if (loading) {
+    return (
+      <div className="font-mono text-black">
+        <div className="border-2 border-black bg-white p-8 shadow-[4px_4px_0_0_#000]">
+          <div className="text-[10px] font-bold tracking-[0.25em] text-neutral-400">
+            SONIC_METRICS / DASHBOARD_
+          </div>
+
+          <div className="mt-4 text-2xl font-black">
+            LOADING_DATA...
+          </div>
+
+          <div className="mt-2 text-xs text-neutral-500">
+            CONNECTING_TO_SPOTIFY_DATA_STREAM
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------------
+  // ERROR STATE
+  // ----------------------------------------------------------
+
+  if (error) {
+    return (
+      <div className="font-mono text-black">
+        <div className="border-2 border-black bg-red-400 p-8 shadow-[4px_4px_0_0_#000]">
+          <div className="text-[10px] font-bold tracking-[0.25em]">
+            SONIC_METRICS / DASHBOARD_
+          </div>
+
+          <div className="mt-4 text-2xl font-black">
+            DATA_LOAD_ERROR
+          </div>
+
+          <div className="mt-2 text-sm">
+            {error}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-6 border-2 border-black bg-white px-4 py-3 text-xs font-bold tracking-widest shadow-[3px_3px_0_0_#000] transition-all hover:bg-yellow-300"
+          >
+            RETRY_CONNECTION →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------------
+  // DASHBOARD
+  // ----------------------------------------------------------
+
   return (
     <div className="font-mono text-black">
       {/* ------------------------------------------------------
@@ -146,13 +239,16 @@ export default function Dashboard() {
             {/* Avatar */}
 
             <div className="aspect-[4/3] w-full overflow-hidden border-2 border-black bg-neutral-800">
-              {profile.avatarUrl ? (
-                <img
-                  src={profile.avatarUrl}
-                  alt={profile.username}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
+                  {profile?.photo ? (
+                    <img
+                      src={profile.photo}
+                      alt={
+                        profile.display_name ??
+                        "Spotify profile"
+                      }
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
                 <div className="flex h-full items-center justify-center">
                   <div className="text-center text-white">
                     <div className="text-5xl font-black">
@@ -170,32 +266,30 @@ export default function Dashboard() {
             {/* Username */}
 
             <h2 className="mt-5 text-3xl font-black">
-              {profile.username}
+              {profile?.display_name ??
+                "UNKNOWN_USER"}
             </h2>
 
             <p className="mt-1 text-xs tracking-widest text-neutral-600">
-              {profile.tag}
+              SPOTIFY_ACCOUNT : {profile?.spotify_product?.toLocaleUpperCase() ?? "UNKNOWN"}
             </p>
 
-            {/* Listening time */}
+            {/* Account information */}
 
-            <div className="mt-5 bg-black px-4 py-3 text-xs font-bold tracking-widest text-white">
-              LISTEN_TIME:{" "}
-              {profile.listenTimeMins.toLocaleString()}{" "}
-              MINS
-            </div>
-
-            {/* Followers / Following */}
-
-            <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="mt-5 grid grid-cols-2 gap-3">
               <ProfileStat
                 label="FOLLOWERS"
-                value={profile.followers}
+                value={(
+                  profile?.followers?.total ?? 0
+                ).toLocaleString()}
               />
 
               <ProfileStat
-                label="FOLLOWING"
-                value={profile.following.toLocaleString()}
+                label="COUNTRY"
+                value={
+                  profile?.country ??
+                  "N/A"
+                }
               />
             </div>
           </div>
@@ -208,38 +302,62 @@ export default function Dashboard() {
         <section className="border-2 border-black bg-white shadow-[4px_4px_0_0_#000]">
           <PanelHeader
             title="TOP_ARTISTS_DENSITY"
-            rightLabel="PERIOD: L30D"
+            rightLabel="PERIOD: LAST 6 MONTHS"
           />
 
           <div className="flex flex-col gap-5 p-5">
-            {topArtists.map((artist, index) => (
-              <div key={artist.name}>
-                <div className="mb-2 flex items-center justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="w-5 shrink-0 text-[10px] font-bold text-neutral-400">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
+            {artists.slice(0, 5).map(
+              (artist, index) => {
+                /*
+                 * We do NOT have listening percentages.
+                 *
+                 * The bar is purely a visual ranking indicator:
+                 * #1 = 100%
+                 * #2 = 80%
+                 * etc.
+                 *
+                 * This does not represent actual listening share.
+                 */
 
-                    <span className="truncate text-sm font-bold">
-                      {artist.name}
-                    </span>
+                const visualWidth =
+                  100 - index * 15;
+
+                return (
+                  <div key={artist.id}>
+                    <div className="mb-2 flex items-center justify-between gap-4">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="w-5 shrink-0 text-[10px] font-bold text-neutral-400">
+                          {String(
+                            artist.rank,
+                          ).padStart(2, "0")}
+                        </span>
+
+                        <span className="truncate text-sm font-bold">
+                          {artist.name}
+                        </span>
+                      </div>
+
+                      <span className="shrink-0 text-[10px] font-bold text-neutral-400">
+                        RANK_{artist.rank}
+                      </span>
+                    </div>
+
+                    <div className="h-7 border-2 border-black bg-white">
+                      <div
+                        className="h-full bg-green-400 transition-all"
+                        style={{
+                          width: `${visualWidth}%`,
+                        }}
+                      />
+                    </div>
                   </div>
+                );
+              },
+            )}
 
-                  <span className="shrink-0 text-sm font-black">
-                    {artist.percent}%
-                  </span>
-                </div>
-
-                <div className="h-7 border-2 border-black bg-white">
-                  <div
-                    className="h-full bg-green-400 transition-all"
-                    style={{
-                      width: `${artist.percent}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+            {artists.length === 0 && (
+              <EmptyState text="NO_ARTIST_DATA" />
+            )}
           </div>
         </section>
 
@@ -248,44 +366,57 @@ export default function Dashboard() {
         ==================================================== */}
 
         <section className="border-2 border-black bg-white shadow-[4px_4px_0_0_#000]">
-          <PanelHeader title="GENRE_SEGMENTATION" />
+          <PanelHeader
+            title="GENRE_SEGMENTATION"
+            rightLabel="TOP 5 GENRES"
+          />
 
           <div className="flex flex-col items-center gap-6 p-5 sm:flex-row sm:items-center">
             <DonutChart
-              data={genres}
-              centerLabel="8"
+              data={displayedGenres}
+              centerLabel={String(
+                overview?.genre_count ?? 0,
+              )}
             />
 
             <div className="w-full flex-1">
               <div className="mb-4 text-[10px] font-bold tracking-[0.2em] text-neutral-400">
-                DETECTED_GENRES_
+                TOP_GENRES_BY_ARTIST_COUNT_
               </div>
 
               <ul className="flex flex-col gap-3 text-sm font-bold">
-                {genres.map((genre) => (
-                  <li
-                    key={genre.label}
-                    className="flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block h-4 w-4 shrink-0 border-2 border-black"
-                        style={{
-                          backgroundColor: genre.color,
-                        }}
-                      />
+                {displayedGenres.map(
+                  (genre) => (
+                    <li
+                      key={genre.label}
+                      className="flex items-center justify-between gap-4"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="inline-block h-4 w-4 shrink-0 border-2 border-black"
+                          style={{
+                            backgroundColor:
+                              genre.color,
+                          }}
+                        />
 
-                      <span>{genre.label}</span>
-                    </div>
+                        <span className="truncate">
+                          {genre.label}
+                        </span>
+                      </div>
 
-                    <span>{genre.percent}%</span>
-                  </li>
-                ))}
+                      <span className="shrink-0 text-xs">
+                        {genre.artistCount} ARTISTS
+                      </span>
+                    </li>
+                  ),
+                )}
               </ul>
 
-              <div className="mt-5 border-l-4 border-black pl-3 text-xs italic leading-relaxed text-neutral-600">
-                "High frequency of abstract patterns detected in current
-                stream cycle."
+              <div className="mt-5 border-l-4 border-black pl-3 text-xs leading-relaxed text-neutral-600">
+                GENRE_DATA IS BASED ON ARTIST
+                CLASSIFICATION. VALUES REPRESENT
+                ARTIST_COUNT, NOT LISTENING TIME.
               </div>
             </div>
           </div>
@@ -298,85 +429,142 @@ export default function Dashboard() {
         <section className="border-2 border-black bg-white shadow-[4px_4px_0_0_#000]">
           <PanelHeader
             title="STREAM_CHRONOLOGY"
-            icon={<History size={16} strokeWidth={2} />}
+            icon={
+              <History
+                size={16}
+                strokeWidth={2}
+              />
+            }
           />
 
           <ul>
-            {streamHistory.map((event) => (
-              <li
-                key={`${event.time}-${event.title}`}
-                className="flex items-start gap-4 border-b border-neutral-200 px-5 py-4 last:border-b-0"
-              >
-                {/* Time */}
+            {recentlyPlayed
+              .slice(0, 5)
+              .map((event) => {
+                const date = new Date(
+                  event.played_at,
+                );
 
-                <span className="w-12 shrink-0 pt-0.5 text-sm text-neutral-500">
-                  {event.time}
-                </span>
+                return (
+                  <li
+                    key={`${event.played_at}-${event.track.id}`}
+                    className="flex items-start gap-4 border-b border-neutral-200 px-5 py-4 last:border-b-0"
+                  >
+                    {/* Time */}
 
-                {/* Track information */}
+                    <span className="w-12 shrink-0 pt-0.5 text-sm text-neutral-500">
+                      {date.toLocaleTimeString(
+                        [],
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        },
+                      )}
+                    </span>
 
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-bold tracking-wide">
-                    {event.title}
-                  </div>
+                    {/* Track information */}
 
-                  <div className="mt-1 truncate text-xs text-neutral-600">
-                    {event.subtitle}
-                  </div>
-                </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-bold tracking-wide">
+                        {event.track.name}
+                      </div>
 
-                {/* Play */}
+                      <div className="mt-1 truncate text-xs text-neutral-600">
+                        {event.track.artists
+                          .map(
+                            (artist) =>
+                              artist.name,
+                          )
+                          .join(", ")}
+                        {" — "}
+                        {event.track.album.name}
+                      </div>
+                    </div>
 
-                <button
-                  type="button"
-                  className="shrink-0 border-2 border-black p-1.5 transition-colors hover:bg-green-400"
-                  aria-label={`Play ${event.title}`}
-                >
-                  <Play size={14} fill="currentColor" />
-                </button>
-              </li>
-            ))}
+                    {/* Track icon */}
+
+                    <Music2
+                      size={16}
+                      strokeWidth={2}
+                      className="shrink-0"
+                    />
+                  </li>
+                );
+              })}
           </ul>
 
-          <div className="border-t-2 border-black px-5 py-3 text-center">
-            <button
-              type="button"
-              className="text-xs font-bold tracking-widest underline underline-offset-4 hover:bg-yellow-300"
-            >
-              LOAD_OLDER_DATA
-            </button>
-          </div>
+          {recentlyPlayed.length === 0 && (
+            <div className="px-5 py-6">
+              <EmptyState text="NO_RECENT_STREAM_DATA" />
+            </div>
+          )}
         </section>
       </div>
 
       {/* ------------------------------------------------------
-          SYSTEM STAT STRIP
+          DATA SUMMARY
       ------------------------------------------------------ */}
 
       <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
-          label="SYSTEM_LATENCY"
-          value={`${systemStats.latencyMs}MS`}
+          label="ARTISTS_ANALYZED"
+          value={String(
+            overview?.artist_count ?? 0,
+          )}
           bg="bg-yellow-300"
-          icon={<Gauge size={18} strokeWidth={2} />}
+          icon={
+            <Users
+              size={18}
+              strokeWidth={2}
+            />
+          }
         />
 
         <StatCard
-          label="DATA_INTEGRITY"
-          value={`${systemStats.dataIntegrity}%`}
+          label="TRACKS_ANALYZED"
+          value={String(
+            overview?.track_count ?? 0,
+          )}
           bg="bg-green-400"
-          icon={<ShieldCheck size={18} strokeWidth={2} />}
+          icon={
+            <Music2
+              size={18}
+              strokeWidth={2}
+            />
+          }
         />
 
         <StatCard
-          label="API_UPTIME"
-          value={systemStats.apiOnline ? "ONLINE" : "OFFLINE"}
+          label="GENRES_DETECTED"
+          value={String(
+            overview?.genre_count ?? 0,
+          )}
           bg="bg-black text-white"
           icon={
-            <span className="h-2.5 w-2.5 rounded-full border border-black bg-green-400" />
+            <span className="text-lg font-black">
+              #
+            </span>
           }
         />
       </section>
+
+      {/* ------------------------------------------------------
+          DATA RANGE
+      ------------------------------------------------------ */}
+
+      <div className="mt-4 flex flex-col gap-1 text-[10px] font-bold tracking-[0.15em] text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          DATA_RANGE:{" "}
+          {TIME_RANGE_LABELS[
+            overview?.time_range ?? ""
+          ] ?? "UNKNOWN"}
+        </span>
+
+        <span>
+          SOURCE: SPOTIFY_API
+        </span>
+      </div>
     </div>
   );
 }
@@ -436,7 +624,7 @@ function ProfileStat({
 }
 
 // ------------------------------------------------------------
-// SYSTEM STAT CARD
+// SUMMARY STAT CARD
 // ------------------------------------------------------------
 
 function StatCard({
@@ -475,6 +663,22 @@ function StatCard({
 }
 
 // ------------------------------------------------------------
+// EMPTY STATE
+// ------------------------------------------------------------
+
+function EmptyState({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="border-2 border-dashed border-neutral-300 px-4 py-6 text-center text-[10px] font-bold tracking-[0.2em] text-neutral-400">
+      {text}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
 // DONUT CHART
 // ------------------------------------------------------------
 
@@ -486,40 +690,54 @@ interface DonutSlice {
   offset: number;
 }
 
+interface DonutGenre {
+  label: string;
+  percent: number;
+  color: string;
+}
+
 function DonutChart({
   data,
   centerLabel,
 }: {
-  data: GenreStat[];
+  data: DonutGenre[];
   centerLabel: string;
 }) {
   const radius = 60;
   const stroke = 24;
-  const circumference = 2 * Math.PI * radius;
+  const circumference =
+    2 * Math.PI * radius;
 
-  const slices = React.useMemo<DonutSlice[]>(() => {
-    return data.reduce<DonutSlice[]>((acc, slice) => {
-      const dash =
-        (slice.percent / 100) * circumference;
+  const slices = React.useMemo<
+    DonutSlice[]
+  >(() => {
+    return data.reduce<DonutSlice[]>(
+      (acc, slice) => {
+        const dash =
+          (slice.percent / 100) *
+          circumference;
 
-      const gap = circumference - dash;
+        const gap =
+          circumference - dash;
 
-      const previousOffset =
-        acc.length > 0
-          ? acc[acc.length - 1].offset +
-            acc[acc.length - 1].dash
-          : 0;
+        const previousOffset =
+          acc.length > 0
+            ? acc[acc.length - 1].offset +
+              acc[acc.length - 1].dash
+            : 0;
 
-      acc.push({
-        label: slice.label,
-        color: slice.color,
-        dash,
-        gap,
-        offset: previousOffset,
-      });
+        acc.push({
+          label: slice.label,
+          color: slice.color,
+          dash,
+          gap,
+          offset: previousOffset,
+        });
 
-      return acc;
-    }, []);
+        return acc;
+      },
+      [],
+    );
   }, [data, circumference]);
 
   return (
