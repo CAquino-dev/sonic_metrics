@@ -32,10 +32,6 @@ import GenreSegmentationCard from "@/components/analytics/GenreSegmentationCard"
 import RecentlyPlayedCard from "@/components/analytics/RecentlyPlayedCard";
 import DashboardSummary from "@/components/analytics/DashboardSummary";
 
-// ------------------------------------------------------------
-// CONSTANTS
-// ------------------------------------------------------------
-
 const GENRE_COLORS = [
   "#4ade80",
   "#facc15",
@@ -50,9 +46,25 @@ const TIME_RANGE_LABELS: Record<string, string> = {
   long_term: "ALL TIME",
 };
 
-// ------------------------------------------------------------
-// DASHBOARD
-// ------------------------------------------------------------
+type TimeRange = "short_term" | "medium_term" | "long_term";
+
+const TIME_RANGES: {
+  value: TimeRange;
+  label: string;
+}[] = [
+  {
+    value: "short_term",
+    label: "LAST 4 WEEKS",
+  },
+  {
+    value: "medium_term",
+    label: "LAST 6 MONTHS",
+  },
+  {
+    value: "long_term",
+    label: "ALL TIME",
+  },
+];
 
 export default function Dashboard() {
   const [profile, setProfile] =
@@ -70,9 +82,8 @@ export default function Dashboard() {
   const [overview, setOverview] =
     useState<AnalyticsOverview | null>(null);
 
-  // ----------------------------------------------------------
-  // LOADING STATES
-  // ----------------------------------------------------------
+  const [timeRange, setTimeRange] =
+    useState<TimeRange>("medium_term");
 
   const [profileLoading, setProfileLoading] =
     useState(true);
@@ -89,10 +100,6 @@ export default function Dashboard() {
   const [overviewLoading, setOverviewLoading] =
     useState(true);
 
-  // ----------------------------------------------------------
-  // ERROR STATES
-  // ----------------------------------------------------------
-
   const [profileError, setProfileError] =
     useState(false);
 
@@ -107,10 +114,6 @@ export default function Dashboard() {
 
   const [overviewError, setOverviewError] =
     useState(false);
-
-  // ----------------------------------------------------------
-  // LOAD PROFILE
-  // ----------------------------------------------------------
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -136,10 +139,6 @@ export default function Dashboard() {
     loadProfile();
   }, []);
 
-  // ----------------------------------------------------------
-  // LOAD OVERVIEW
-  // ----------------------------------------------------------
-
   useEffect(() => {
     const loadOverview = async () => {
       try {
@@ -147,9 +146,7 @@ export default function Dashboard() {
         setOverviewError(false);
 
         const data =
-          await getAnalyticsOverview(
-            "medium_term",
-          );
+          await getAnalyticsOverview(timeRange);
 
         setOverview(data);
       } catch (error) {
@@ -165,11 +162,7 @@ export default function Dashboard() {
     };
 
     loadOverview();
-  }, []);
-
-  // ----------------------------------------------------------
-  // LOAD ARTISTS
-  // ----------------------------------------------------------
+  }, [timeRange]);
 
   useEffect(() => {
     const loadArtists = async () => {
@@ -179,7 +172,7 @@ export default function Dashboard() {
 
         const data =
           await getAnalyticsArtists(
-            "medium_term",
+            timeRange,
             20,
           );
 
@@ -197,11 +190,7 @@ export default function Dashboard() {
     };
 
     loadArtists();
-  }, []);
-
-  // ----------------------------------------------------------
-  // LOAD GENRES
-  // ----------------------------------------------------------
+  }, [timeRange]);
 
   useEffect(() => {
     const loadGenres = async () => {
@@ -211,7 +200,7 @@ export default function Dashboard() {
 
         const data =
           await getAnalyticsGenres(
-            "medium_term",
+            timeRange,
             20,
           );
 
@@ -229,11 +218,7 @@ export default function Dashboard() {
     };
 
     loadGenres();
-  }, []);
-
-  // ----------------------------------------------------------
-  // LOAD RECENTLY PLAYED
-  // ----------------------------------------------------------
+  }, [timeRange]);
 
   useEffect(() => {
     const loadRecentlyPlayed = async () => {
@@ -260,10 +245,6 @@ export default function Dashboard() {
     loadRecentlyPlayed();
   }, []);
 
-  // ----------------------------------------------------------
-  // GENRE VISUALIZATION
-  // ----------------------------------------------------------
-
   const displayedGenres = useMemo(() => {
     const topGenres = genres.slice(0, 5);
 
@@ -277,13 +258,6 @@ export default function Dashboard() {
       (genre, index) => ({
         label: genre.genre,
         artistCount: genre.artist_count,
-
-        /*
-         * This percentage is NOT listening share.
-         *
-         * It represents the relative artist
-         * count among the displayed top genres.
-         */
         percent:
           total > 0
             ? Math.round(
@@ -291,7 +265,6 @@ export default function Dashboard() {
                   100,
               )
             : 0,
-
         color:
           GENRE_COLORS[
             index % GENRE_COLORS.length
@@ -300,16 +273,11 @@ export default function Dashboard() {
     );
   }, [genres]);
 
-  // ----------------------------------------------------------
-  // DASHBOARD
-  // ----------------------------------------------------------
+  const currentRangeLabel =
+    TIME_RANGE_LABELS[timeRange];
 
   return (
     <div className="font-mono text-black">
-      {/* ------------------------------------------------------
-          PAGE HEADER
-      ------------------------------------------------------ */}
-
       <header className="mb-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -329,29 +297,51 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* ------------------------------------------------------
-          MAIN DASHBOARD GRID
-      ------------------------------------------------------ */}
+      <div className="sticky top-0 z-10 -mx-2 mb-6 border-2 border-black bg-white/95 px-3 py-2 shadow-[4px_4px_0_0_#000] backdrop-blur">
+        <div className="flex items-center gap-3">
+          <span className="hidden text-[10px] font-bold tracking-[0.2em] text-neutral-400 sm:inline">
+            TIME_RANGE
+          </span>
+
+          <div className="inline-flex border-2 border-black">
+            {TIME_RANGES.map((range, i) => {
+              const isActive = timeRange === range.value;
+              return (
+                <button
+                  key={range.value}
+                  type="button"
+                  onClick={() => setTimeRange(range.value)}
+                  className={[
+                    "px-3 py-1.5 text-[10px] font-bold tracking-[0.15em]",
+                    i > 0 ? "border-l-2 border-black" : "",
+                    isActive ? "bg-black text-white" : "bg-white hover:bg-neutral-100",
+                  ].join(" ")}
+                >
+                  {range.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <span className="ml-auto hidden text-[10px] font-bold tracking-widest text-neutral-400 md:inline">
+            DATA_RANGE: {currentRangeLabel}
+          </span>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.4fr]">
-
-        {/* PROFILE IDENTITY */}
-
         <ProfileCard
           profile={profile}
           loading={profileLoading}
           error={profileError}
         />
 
-        {/* TOP ARTISTS */}
-
         <TopArtistsCard
           artists={artists}
           loading={artistsLoading}
           error={artistsError}
+          timeRangeLabel={currentRangeLabel}
         />
-
-        {/* GENRE SEGMENTATION */}
 
         <GenreSegmentationCard
           genres={displayedGenres}
@@ -362,8 +352,6 @@ export default function Dashboard() {
           error={genresError}
         />
 
-        {/* STREAM CHRONOLOGY */}
-
         <RecentlyPlayedCard
           recentlyPlayed={recentlyPlayed}
           loading={recentlyPlayedLoading}
@@ -371,26 +359,15 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* ------------------------------------------------------
-          DATA SUMMARY
-      ------------------------------------------------------ */}
-
       <DashboardSummary
         overview={overview}
         loading={overviewLoading}
         error={overviewError}
       />
 
-      {/* ------------------------------------------------------
-          DATA RANGE
-      ------------------------------------------------------ */}
-
       <div className="mt-4 flex flex-col gap-1 text-[10px] font-bold tracking-[0.15em] text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
         <span>
-          DATA_RANGE:{" "}
-          {TIME_RANGE_LABELS[
-            overview?.time_range ?? ""
-          ] ?? "UNKNOWN"}
+          DATA_RANGE: {currentRangeLabel}
         </span>
 
         <span>

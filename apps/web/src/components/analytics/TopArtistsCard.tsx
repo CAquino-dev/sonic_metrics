@@ -6,12 +6,14 @@ interface TopArtistsCardProps {
   artists: AnalyticsArtist[];
   loading: boolean;
   error: boolean;
+  timeRangeLabel: string;
 }
 
 export default function TopArtistsCard({
   artists,
   loading,
   error,
+  timeRangeLabel,
 }: TopArtistsCardProps) {
   return (
     <section className="border-2 border-black bg-white shadow-[4px_4px_0_0_#000]">
@@ -21,7 +23,7 @@ export default function TopArtistsCard({
         </span>
 
         <span className="text-[10px] tracking-widest text-neutral-500">
-          PERIOD: LAST 6 MONTHS
+          PERIOD: {timeRangeLabel}
         </span>
       </div>
 
