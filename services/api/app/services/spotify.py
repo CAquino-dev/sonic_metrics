@@ -16,13 +16,22 @@ async def get_current_user(access_token: str) -> dict:
             },
         )
 
+    if response.status_code == 429:
+        retry_after = response.headers.get("Retry-After")
+
+        raise RuntimeError(
+            "Spotify /me request was rate limited (429). "
+            f"Retry-After: {retry_after or 'not provided'}. "
+            f"Response: {response.text}"
+        )
+
     if response.status_code != 200:
         raise RuntimeError(
-            f"Spotify /me request failed: {response.status_code}"
+            f"Spotify /me request failed: "
+            f"{response.status_code} - {response.text}"
         )
 
     return response.json()
-
 
 async def refresh_access_token(
     client_id: str,

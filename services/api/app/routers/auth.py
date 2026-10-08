@@ -14,8 +14,10 @@ from app.models.user import User
 from app.services.spotify import get_current_user as get_spotify_user
 from app.services.auth import create_access_token
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
-
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"],
+)
 
 SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
@@ -42,15 +44,19 @@ def spotify_login():
         "state": state,
     }
 
-    spotify_url = f"{SPOTIFY_AUTHORIZE_URL}?{urlencode(params)}"
+    spotify_url = (
+        f"{SPOTIFY_AUTHORIZE_URL}?{urlencode(params)}"
+    )
 
-    response = RedirectResponse(url=spotify_url)
+    response = RedirectResponse(
+        url=spotify_url
+    )
 
     response.set_cookie(
         key="spotify_oauth_state",
         value=state,
         httponly=True,
-        secure=False,  # True in production with HTTPS
+        secure=False,
         samesite="lax",
         max_age=600,
     )
@@ -65,7 +71,9 @@ async def spotify_callback(
     state: str = Query(...),
     db: Session = Depends(get_db),
 ):
-    stored_state = request.cookies.get("spotify_oauth_state")
+    stored_state = request.cookies.get(
+        "spotify_oauth_state"
+    )
 
     if not stored_state or not secrets.compare_digest(
         state,
@@ -93,9 +101,26 @@ async def spotify_callback(
         )
 
     if response.status_code != 200:
+        try:
+            spotify_error = response.json()
+        except ValueError:
+            spotify_error = {
+                "response": response.text
+            }
+
+        print(
+            "Spotify token exchange failed:",
+            response.status_code,
+            spotify_error,
+        )
+
         raise HTTPException(
             status_code=400,
-            detail="Failed to exchange Spotify authorization code.",
+            detail={
+                "message": "Failed to exchange Spotify authorization code.",
+                "spotify_status": response.status_code,
+                "spotify_error": spotify_error,
+            },
         )
 
     tokens = response.json()
@@ -107,7 +132,8 @@ async def spotify_callback(
     user = (
         db.query(User)
         .filter(
-            User.spotify_user_id == spotify_user["id"]
+            User.spotify_user_id
+            == spotify_user["id"]
         )
         .first()
     )
@@ -115,7 +141,9 @@ async def spotify_callback(
     if user is None:
         user = User(
             spotify_user_id=spotify_user["id"],
-            display_name=spotify_user.get("display_name"),
+            display_name=spotify_user.get(
+                "display_name"
+            ),
             email=spotify_user.get("email"),
         )
 
@@ -123,12 +151,13 @@ async def spotify_callback(
         db.commit()
         db.refresh(user)
 
-    # Calculate when the access token expires
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=tokens["expires_in"]
+    expires_at = (
+        datetime.now(timezone.utc)
+        + timedelta(
+            seconds=tokens["expires_in"]
+        )
     )
 
-    # Check if this user already has Spotify tokens
     spotify_token = (
         db.query(SpotifyToken)
         .filter(
@@ -148,18 +177,20 @@ async def spotify_callback(
         db.add(spotify_token)
 
     else:
-        spotify_token.access_token = tokens["access_token"]
-        spotify_token.refresh_token = tokens["refresh_token"]
+        spotify_token.access_token = (
+            tokens["access_token"]
+        )
+        spotify_token.refresh_token = (
+            tokens["refresh_token"]
+        )
         spotify_token.expires_at = expires_at
 
     db.commit()
 
-    # Create a Sonic Metrics JWT
     access_token = create_access_token(
         user_id=user.id
     )
 
-    # Redirect back to the React application
     frontend_callback_url = (
         "http://localhost:5173/auth/callback"
         f"?token={access_token}"
@@ -169,7 +200,6 @@ async def spotify_callback(
         url=frontend_callback_url
     )
 
-    # Remove the OAuth state cookie
     response.delete_cookie(
         key="spotify_oauth_state"
     )
