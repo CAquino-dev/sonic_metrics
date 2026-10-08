@@ -1,5 +1,3 @@
-// apps/web/src/layouts/AppLayout.tsx
-
 import { NavLink, Outlet } from "react-router-dom";
 import {
   BarChart3,
@@ -56,9 +54,7 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-[#f4f2ea] font-mono text-black">
-      {/* =========================================================
-          GRAPH PAPER BACKGROUND
-      ========================================================= */}
+      {/* Graph paper background */}
 
       <div
         className="pointer-events-none fixed inset-0 opacity-60"
@@ -69,19 +65,15 @@ export default function AppLayout() {
         }}
       />
 
-      {/* =========================================================
-          APP SHELL
-      ========================================================= */}
+      {/* App shell */}
 
       <div className="relative z-10 flex min-h-screen">
-        {/* =======================================================
-            SIDEBAR
-        ======================================================= */}
+        {/* Sidebar */}
 
-        <aside className="hidden w-64 shrink-0 flex-col border-r-2 border-black bg-[#faf9f4] lg:flex">
+        <aside className="hidden h-screen w-64 shrink-0 flex-col border-r-2 border-black bg-[#faf9f4] lg:flex">
           {/* Logo */}
 
-          <div className="border-b-2 border-black px-6 py-6">
+          <div className="shrink-0 border-b-2 border-black px-6 py-6">
             <div className="text-xl font-black italic tracking-tight">
               SONIC_METRICS
             </div>
@@ -93,7 +85,7 @@ export default function AppLayout() {
 
           {/* Navigation */}
 
-          <nav className="flex-1 px-4 py-6">
+          <nav className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
             <div className="mb-4 px-2 text-[10px] font-bold tracking-[0.2em] text-neutral-400">
               NAVIGATION_
             </div>
@@ -111,7 +103,6 @@ export default function AppLayout() {
                         "group flex items-center gap-3 border-2 px-3 py-3",
                         "text-xs font-bold tracking-widest",
                         "transition-all",
-
                         isActive
                           ? [
                               "border-black",
@@ -154,7 +145,7 @@ export default function AppLayout() {
 
           {/* System information */}
 
-          <div className="border-t-2 border-black">
+          <div className="shrink-0 border-t-2 border-black">
             <div className="px-6 py-5">
               <div className="text-[10px] tracking-[0.2em] text-neutral-400">
                 SYSTEM_STATUS
@@ -190,14 +181,10 @@ export default function AppLayout() {
           </div>
         </aside>
 
-        {/* =======================================================
-            MAIN CONTENT
-        ======================================================= */}
+        {/* Main content */}
 
         <main className="min-w-0 flex-1">
-          {/* =====================================================
-              MOBILE / TABLET HEADER
-          ===================================================== */}
+          {/* Mobile / tablet header */}
 
           <header className="sticky top-0 z-20 flex items-center justify-between border-b-2 border-black bg-[#faf9f4] px-5 py-4 lg:hidden">
             <div>
@@ -225,9 +212,7 @@ export default function AppLayout() {
             </button>
           </header>
 
-          {/* =====================================================
-              DESKTOP TOP BAR
-          ===================================================== */}
+          {/* Desktop top bar */}
 
           <div className="hidden items-center justify-between border-b-2 border-black bg-[#faf9f4] px-8 py-4 lg:flex">
             <div>
@@ -250,9 +235,7 @@ export default function AppLayout() {
             </div>
           </div>
 
-          {/* =====================================================
-              PAGE CONTENT
-          ===================================================== */}
+          {/* Page content */}
 
           <div className="p-4 sm:p-6 lg:p-8 xl:p-10">
             <Outlet />
