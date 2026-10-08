@@ -26,11 +26,11 @@ import type {
   AnalyticsOverview,
 } from "../types/analytics";
 
-import ProfileCard from "@/components/analytics/ProfileCard";
-import TopArtistsCard from "@/components/analytics/TopArtistsCard";
-import GenreSegmentationCard from "@/components/analytics/GenreSegmentationCard";
-import RecentlyPlayedCard from "@/components/analytics/RecentlyPlayedCard";
-import DashboardSummary from "@/components/analytics/DashboardSummary";
+import ProfileCard from "@/components/dashboard/ProfileCard";
+import TopArtistsCard from "@/components/dashboard/TopArtistsCard";
+import GenreSegmentationCard from "@/components/dashboard/GenreSegmentationCard";
+import RecentlyPlayedCard from "@/components/dashboard/RecentlyPlayedCard";
+import DashboardSummary from "@/components/dashboard/DashboardSummary";
 
 const GENRE_COLORS = [
   "#4ade80",
