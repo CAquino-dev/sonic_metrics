@@ -13,6 +13,7 @@
     "@base-ui/react": "^1.8.0",
     "@fontsource-variable/geist": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
+    "animejs": "^4.5.0",
     "axios": "^1.20.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.0",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/animejs": "^3.1.13",
     "@types/node": "^24.13.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

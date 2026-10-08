@@ -1,5 +1,3 @@
-// src/services/analytics.ts
-
 import { api } from "./api";
 
 import type {
