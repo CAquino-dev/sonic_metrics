@@ -31,6 +31,10 @@ import TopArtistsCard from "@/components/dashboard/TopArtistsCard";
 import GenreSegmentationCard from "@/components/dashboard/GenreSegmentationCard";
 import RecentlyPlayedCard from "@/components/dashboard/RecentlyPlayedCard";
 import DashboardSummary from "@/components/dashboard/DashboardSummary";
+import DashboardTimeRange, {
+  TIME_RANGE_LABELS,
+  type TimeRange,
+} from "@/components/dashboard/DashboardTimeRange";
 
 const GENRE_COLORS = [
   "#4ade80",
@@ -38,32 +42,6 @@ const GENRE_COLORS = [
   "#111111",
   "#fb7185",
   "#60a5fa",
-];
-
-const TIME_RANGE_LABELS: Record<string, string> = {
-  short_term: "LAST 4 WEEKS",
-  medium_term: "LAST 6 MONTHS",
-  long_term: "ALL TIME",
-};
-
-type TimeRange = "short_term" | "medium_term" | "long_term";
-
-const TIME_RANGES: {
-  value: TimeRange;
-  label: string;
-}[] = [
-  {
-    value: "short_term",
-    label: "LAST 4 WEEKS",
-  },
-  {
-    value: "medium_term",
-    label: "LAST 6 MONTHS",
-  },
-  {
-    value: "long_term",
-    label: "ALL TIME",
-  },
 ];
 
 export default function Dashboard() {
@@ -297,39 +275,12 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="sticky top-0 z-10 -mx-2 mb-6 border-2 border-black bg-white/95 px-3 py-2 shadow-[4px_4px_0_0_#000] backdrop-blur">
-        <div className="flex items-center gap-3">
-          <span className="hidden text-[10px] font-bold tracking-[0.2em] text-neutral-400 sm:inline">
-            TIME_RANGE
-          </span>
+      <DashboardTimeRange
+        value={timeRange}
+        onChange={setTimeRange}
+      />
 
-          <div className="inline-flex border-2 border-black">
-            {TIME_RANGES.map((range, i) => {
-              const isActive = timeRange === range.value;
-              return (
-                <button
-                  key={range.value}
-                  type="button"
-                  onClick={() => setTimeRange(range.value)}
-                  className={[
-                    "px-3 py-1.5 text-[10px] font-bold tracking-[0.15em]",
-                    i > 0 ? "border-l-2 border-black" : "",
-                    isActive ? "bg-black text-white" : "bg-white hover:bg-neutral-100",
-                  ].join(" ")}
-                >
-                  {range.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <span className="ml-auto hidden text-[10px] font-bold tracking-widest text-neutral-400 md:inline">
-            DATA_RANGE: {currentRangeLabel}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.4fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.4fr]">
         <ProfileCard
           profile={profile}
           loading={profileLoading}
@@ -376,4 +327,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
+} 
