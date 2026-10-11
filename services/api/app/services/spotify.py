@@ -1,218 +1,66 @@
+"""Uncached Spotify transport. Data routes must use CachedData."""
+import logging
 from datetime import datetime, timedelta, timezone
-
 import httpx
+from app.services.cache import UpstreamError
 
+logger = logging.getLogger(__name__)
+SPOTIFY_API_BASE_URL = 'https://api.spotify.com/v1'
+SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token'
 
-SPOTIFY_API_BASE_URL = "https://api.spotify.com/v1"
-SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
-
-
-async def get_current_user(access_token: str) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{SPOTIFY_API_BASE_URL}/me",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-        )
-
-    if response.status_code == 429:
-        retry_after = response.headers.get("Retry-After")
-
-        raise RuntimeError(
-            "Spotify /me request was rate limited (429). "
-            f"Retry-After: {retry_after or 'not provided'}. "
-            f"Response: {response.text}"
-        )
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Spotify /me request failed: "
-            f"{response.status_code} - {response.text}"
-        )
-
-    return response.json()
-
-async def refresh_access_token(
-    client_id: str,
-    client_secret: str,
-    refresh_token: str,
-) -> dict:
-    token_data = {
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            SPOTIFY_TOKEN_URL,
-            data=token_data,
-            auth=(
-                client_id,
-                client_secret,
-            ),
-        )
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Spotify token refresh failed: {response.status_code}"
-        )
-
-    return response.json()
-
-
-async def get_valid_access_token(
-    spotify_token,
-    client_id: str,
-    client_secret: str,
-) -> str:
-    now = datetime.now(timezone.utc)
-
-    # Token is still valid
-    if spotify_token.expires_at > now:
-        return spotify_token.access_token
-
-    # Token has expired, so refresh it
-    tokens = await refresh_access_token(
-        client_id=client_id,
-        client_secret=client_secret,
-        refresh_token=spotify_token.refresh_token,
-    )
-
-    spotify_token.access_token = tokens["access_token"]
-
-    # Calculate the new expiration time
-    spotify_token.expires_at = now + timedelta(
-        seconds=tokens["expires_in"]
-    )
-
-    # Spotify may provide a new refresh token
-    if "refresh_token" in tokens:
-        spotify_token.refresh_token = tokens["refresh_token"]
-
-    return spotify_token.access_token
-
-async def get_spotify_profile(
-    access_token: str,
-) -> dict:
-    return await get_current_user(access_token)
-
-async def get_top_artists(
-    access_token: str,
-    time_range: str = "medium_term",
-    limit: int = 20,
-) -> dict:
-    params = {
-        "time_range": time_range,
-        "limit": limit,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{SPOTIFY_API_BASE_URL}/me/top/artists",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-            params=params,
-        )
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Spotify top artists request failed: "
-            f"{response.status_code} - {response.text}"
-        )
-
-    return response.json()
-
-async def get_artist(
-    access_token: str,
-    artist_id: str,
-) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{SPOTIFY_API_BASE_URL}/artists/{artist_id}",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-        )
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Spotify artist request failed: "
-            f"{response.status_code} - {response.text}"
-        )
-
-    return response.json()
-
-async def get_top_tracks(
-    access_token: str,
-    time_range: str = "medium_term",
-    limit: int = 20,
-) -> dict:
-    params = {
-        "time_range": time_range,
-        "limit": limit,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{SPOTIFY_API_BASE_URL}/me/top/tracks",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-            params=params,
-        )
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Spotify top tracks request failed: "
-            f"{response.status_code} - {response.text}"
-        )
-
-    return response.json()
-
-
-async def get_recently_played(
-    access_token: str,
-    limit: int = 20,
-) -> dict:
-    params = {
-        "limit": limit,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{SPOTIFY_API_BASE_URL}/me/player/recently-played",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-            params=params,
-        )
-
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Spotify recently played request failed: "
-            f"{response.status_code} - {response.text}"
-        )
-
-    return response.json()
-
-async def get_player_state(access_token: str) -> dict | None:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{SPOTIFY_API_BASE_URL}/me/player",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-            },
-        )
-
+async def request(method, url, **kwargs):
+    logger.info('upstream_call provider=spotify resource=%s', url.split('?')[0].split('/')[-1])
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.request(method, url, **kwargs)
+    except httpx.RequestError:
+        raise UpstreamError(502) from None
     if response.status_code == 204:
         return None
-
     if response.status_code != 200:
-        raise RuntimeError(
-            f"Spotify player request failed: "
-            f"{response.status_code} - {response.text}"
-        )
+        raise UpstreamError(response.status_code, response.headers.get('Retry-After'))
+    try:
+        return response.json()
+    except ValueError:
+        raise UpstreamError(502) from None
 
-    return response.json()
+async def get_current_user(access_token):
+    return await get('/me', access_token)
+
+async def get(path, access_token, **params):
+    return await request('GET', SPOTIFY_API_BASE_URL + path,
+                         headers={'Authorization': f'Bearer {access_token}'}, params=params)
+
+async def refresh_access_token(client_id, client_secret, refresh_token):
+    return await request('POST', SPOTIFY_TOKEN_URL,
+                         data={'grant_type': 'refresh_token', 'refresh_token': refresh_token},
+                         auth=(client_id, client_secret))
+
+async def get_valid_access_token(spotify_token, client_id, client_secret):
+    now = datetime.now(timezone.utc)
+    if spotify_token.expires_at > now:
+        return spotify_token.access_token
+    tokens = await refresh_access_token(client_id, client_secret, spotify_token.refresh_token)
+    spotify_token.access_token = tokens['access_token']
+    spotify_token.expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens['expires_in'])
+    if 'refresh_token' in tokens:
+        spotify_token.refresh_token = tokens['refresh_token']
+    return spotify_token.access_token
+
+async def get_spotify_profile(access_token):
+    return await get_current_user(access_token)
+
+async def get_top_artists(access_token, time_range='medium_term', limit=20):
+    return await get('/me/top/artists', access_token, time_range=time_range, limit=limit)
+
+async def get_top_tracks(access_token, time_range='medium_term', limit=20):
+    return await get('/me/top/tracks', access_token, time_range=time_range, limit=limit)
+
+async def get_artist(access_token, artist_id):
+    return await get(f'/artists/{artist_id}', access_token)
+
+async def get_recently_played(access_token, limit=20):
+    return await get('/me/player/recently-played', access_token, limit=limit)
+
+async def get_player_state(access_token):
+    return await get('/me/player', access_token)

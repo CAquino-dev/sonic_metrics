@@ -1,17 +1,8 @@
+from app.services.data import CachedData, get_cached_data
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 
-from app.database.session import get_db
-from app.models.spotify_token import SpotifyToken
 from app.models.user import User
-from app.config.settings import settings
 from app.services.dependencies import get_current_user
-from app.services.spotify import (
-    get_top_artists,
-    get_top_tracks,
-    get_valid_access_token,
-)
-from app.services.lastfm import get_artist_tags
 from app.services.genre_normalizer import normalize_genre
 
 
@@ -27,45 +18,18 @@ async def analytics_overview(
         pattern="^(short_term|medium_term|long_term)$",
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
 
     try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    db.commit()
-
-    try:
-        top_artists = await get_top_artists(
-            access_token=access_token,
+        top_artists = await data_service.spotify(
+            current_user.id, "top_artists",
             time_range=time_range,
             limit=20,
         )
 
-        top_tracks = await get_top_tracks(
-            access_token=access_token,
+        top_tracks = await data_service.spotify(
+            current_user.id, "top_tracks",
             time_range=time_range,
             limit=20,
         )
@@ -88,7 +52,7 @@ async def analytics_overview(
             continue
 
         try:
-            tags = await get_artist_tags(
+            tags = await data_service.tags(
                 artist_name=artist_name,
                 limit=10,
             )
@@ -189,39 +153,12 @@ async def analytics_artists(
         le=50,
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
 
     try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    db.commit()
-
-    try:
-        data = await get_top_artists(
-            access_token=access_token,
+        data = await data_service.spotify(
+            current_user.id, "top_artists",
             time_range=time_range,
             limit=limit,
         )
@@ -242,7 +179,7 @@ async def analytics_artists(
 
         if artist_name:
             try:
-                tags = await get_artist_tags(
+                tags = await data_service.tags(
                     artist_name=artist_name,
                     limit=10,
                 )
@@ -292,39 +229,12 @@ async def analytics_tracks(
         le=50,
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
 
     try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    db.commit()
-
-    try:
-        data = await get_top_tracks(
-            access_token=access_token,
+        data = await data_service.spotify(
+            current_user.id, "top_tracks",
             time_range=time_range,
             limit=limit,
         )
@@ -381,39 +291,12 @@ async def analytics_genres(
         le=50,
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
 
     try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    db.commit()
-
-    try:
-        data = await get_top_artists(
-            access_token=access_token,
+        data = await data_service.spotify(
+            current_user.id, "top_artists",
             time_range=time_range,
             limit=artist_limit,
         )
@@ -434,7 +317,7 @@ async def analytics_genres(
             continue
 
         try:
-            tags = await get_artist_tags(
+            tags = await data_service.tags(
                 artist_name=artist_name,
                 limit=10,
             )

@@ -1,22 +1,9 @@
+from app.services.data import CachedData, get_cached_data
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 
-from app.config.settings import settings
-from app.database.session import get_db
-from app.models.spotify_token import SpotifyToken
 from app.models.user import User
 from app.services.dependencies import get_current_user
-from app.services.spotify import (
-    get_current_user as get_spotify_user,
-    get_valid_access_token,
-    get_top_artists,
-    get_top_tracks,
-    get_recently_played,
-    get_artist,
-    get_player_state,
-    )
 
-from app.services.lastfm import get_artist_tags
 from app.services.genre_normalizer import normalize_genre
 
 router = APIRouter(
@@ -28,45 +15,12 @@ router = APIRouter(
 @router.get("/me")
 async def spotify_me(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    # Find the current user's Spotify tokens
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
-
-    try:
-        # Get a valid Spotify access token.
-        # This automatically refreshes it if expired.
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    # Save any token changes caused by a refresh
-    db.commit()
 
     try:
         # Get the user's profile from Spotify
-        spotify_user = await get_spotify_user(
-            access_token
-        )
+        spotify_user = await data_service.spotify(current_user.id, "profile")
     except RuntimeError as exc:
         raise HTTPException(
             status_code=502,
@@ -102,43 +56,13 @@ async def top_artists(
         le=50,
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    # Find the user's Spotify token
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
-
-    # Get a valid Spotify access token
-    try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    # Save refreshed token information
-    db.commit()
 
     # Get top artists from Spotify
     try:
-        data = await get_top_artists(
-            access_token=access_token,
+        data = await data_service.spotify(
+            current_user.id, "top_artists",
             time_range=time_range,
             limit=limit,
         )
@@ -180,43 +104,13 @@ async def top_tracks(
         le=50,
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    # Find the user's Spotify token
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
-
-    # Get a valid Spotify access token
-    try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    # Save refreshed token information
-    db.commit()
 
     # Get top tracks from Spotify
     try:
-        data = await get_top_tracks(
-            access_token=access_token,
+        data = await data_service.spotify(
+            current_user.id, "top_tracks",
             time_range=time_range,
             limit=limit,
         )
@@ -262,43 +156,13 @@ async def recently_played(
         le=50,
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    # Find the user's Spotify token
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
-
-    # Get a valid Spotify access token
-    try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    # Save refreshed token information
-    db.commit()
 
     # Get recently played tracks from Spotify
     try:
-        data = await get_recently_played(
-            access_token=access_token,
+        data = await data_service.spotify(
+            current_user.id, "recent",
             limit=limit,
         )
     except RuntimeError as exc:
@@ -353,39 +217,12 @@ async def spotify_genres(
         le=50,
     ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
 
     try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    db.commit()
-
-    try:
-        top_artists = await get_top_artists(
-            access_token=access_token,
+        top_artists = await data_service.spotify(
+            current_user.id, "top_artists",
             time_range=time_range,
             limit=limit,
         )
@@ -404,7 +241,7 @@ async def spotify_genres(
             continue
 
         try:
-            tags = await get_artist_tags(
+            tags = await data_service.tags(
                 artist_name=artist_name,
                 limit=10,
             )
@@ -449,10 +286,11 @@ async def spotify_genres(
 
 @router.get("/artist-tags")
 async def artist_tags(
+    data_service: CachedData = Depends(get_cached_data),
     artist: str = Query(..., min_length=1),
 ):
     try:
-        tags = await get_artist_tags(artist_name=artist)
+        tags = await data_service.tags(artist_name=artist)
 
     except RuntimeError as exc:
         raise HTTPException(
@@ -465,125 +303,15 @@ async def artist_tags(
         "tags": tags,
     }
 
-@router.get("/recently-played")
-async def recently_played(
-    limit: int = Query(
-        default=20,
-        ge=1,
-        le=50,
-    ),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
-
-    try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    db.commit()
-
-    try:
-        data = await get_recently_played(
-            access_token=access_token,
-            limit=limit,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to retrieve recently played tracks from Spotify.",
-        ) from exc
-
-    return {
-        "limit": limit,
-        "items": [
-            {
-                "played_at": item.get("played_at"),
-                "track": {
-                    "id": item["track"]["id"],
-                    "name": item["track"]["name"],
-                    "duration_ms": item["track"].get("duration_ms"),
-                    "explicit": item["track"].get("explicit"),
-                    "artists": [
-                        {
-                            "id": artist["id"],
-                            "name": artist["name"],
-                        }
-                        for artist in item["track"].get(
-                            "artists",
-                            [],
-                        )
-                    ],
-                    "album": {
-                        "id": item["track"]["album"]["id"],
-                        "name": item["track"]["album"]["name"],
-                        "images": item["track"]["album"].get(
-                            "images",
-                            [],
-                        ),
-                    },
-                },
-            }
-            for item in data.get("items", [])
-        ],
-    }
-
 @router.get("/player")
 async def spotify_player(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    data_service: CachedData = Depends(get_cached_data),
 ):
-    spotify_token = (
-        db.query(SpotifyToken)
-        .filter(
-            SpotifyToken.user_id == current_user.id
-        )
-        .first()
-    )
-
-    if spotify_token is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Spotify account is not connected.",
-        )
 
     try:
-        access_token = await get_valid_access_token(
-            spotify_token=spotify_token,
-            client_id=settings.spotify_client_id,
-            client_secret=settings.spotify_client_secret,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to refresh Spotify access token.",
-        ) from exc
-
-    db.commit()
-
-    try:
-        player = await get_player_state(
-            access_token=access_token,
+        player = await data_service.spotify(
+            current_user.id, "player",
         )
     except RuntimeError as exc:
         raise HTTPException(

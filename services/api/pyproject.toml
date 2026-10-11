@@ -7,10 +7,11 @@ dependencies = [
     "alembic",
     "fastapi",
     "httpx>=0.28.1",
-    "psycopg",
+    "psycopg[binary]",
     "pydantic-settings",
     "python-jose[cryptography]>=3.5.0",
     "sqlalchemy",
+    "redis>=5.2",
     "uvicorn[standard]",
 ]
 
@@ -18,4 +19,5 @@ dependencies = [
 dev = [
     "httpx",
     "pytest",
+    "fakeredis[lua]>=2.28",
 ]

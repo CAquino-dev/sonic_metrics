@@ -11,7 +11,8 @@ from app.config.settings import settings
 from app.database.session import get_db
 from app.models.spotify_token import SpotifyToken
 from app.models.user import User
-from app.services.spotify import get_current_user as get_spotify_user
+from app.services.data import oauth_profile
+from app.services.cache import retry_delay
 from app.services.auth import create_access_token
 
 router = APIRouter(
@@ -90,29 +91,26 @@ async def spotify_callback(
         "redirect_uri": settings.spotify_redirect_uri,
     }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            SPOTIFY_TOKEN_URL,
-            data=token_data,
-            auth=(
-                settings.spotify_client_id,
-                settings.spotify_client_secret,
-            ),
-        )
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                SPOTIFY_TOKEN_URL,
+                data=token_data,
+                auth=(settings.spotify_client_id, settings.spotify_client_secret),
+            )
+    except httpx.RequestError:
+        raise HTTPException(502, 'Spotify token exchange is unavailable.') from None
 
     if response.status_code != 200:
+        if response.status_code == 429:
+            raise HTTPException(429, 'Spotify token exchange is rate limited.',
+                                headers={'Retry-After': str(retry_delay(response.headers.get('Retry-After')))})
         try:
             spotify_error = response.json()
         except ValueError:
             spotify_error = {
                 "response": response.text
             }
-
-        print(
-            "Spotify token exchange failed:",
-            response.status_code,
-            spotify_error,
-        )
 
         raise HTTPException(
             status_code=400,
@@ -125,8 +123,8 @@ async def spotify_callback(
 
     tokens = response.json()
 
-    spotify_user = await get_spotify_user(
-        tokens["access_token"]
+    spotify_user = await oauth_profile(
+        request.app.state.data_cache, tokens["access_token"]
     )
 
     user = (
@@ -186,6 +184,11 @@ async def spotify_callback(
         spotify_token.expires_at = expires_at
 
     db.commit()
+
+    cache = request.app.state.data_cache
+    await cache.seed(cache.key('spotify', user.id, 'profile'), spotify_user,
+                     settings.cache_profile_fresh_seconds,
+                     settings.cache_profile_max_age_seconds)
 
     access_token = create_access_token(
         user_id=user.id
